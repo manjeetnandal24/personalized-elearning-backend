@@ -1,0 +1,52 @@
+export type Course = {
+  id: number;
+  shortName: string;
+  title: string;
+  description: string;
+  level: string;
+  instructor: string;
+  lessons: number;
+};
+
+export const courses: Course[] = [
+  {
+    id: 1,
+    shortName: "JS",
+    title: "JavaScript Fundamentals",
+    description:
+      "Learn variables, functions, arrays, objects and modern JavaScript.",
+    level: "Beginner",
+    instructor: "LearnTrack Team",
+    lessons: 5,
+  },
+  {
+    id: 2,
+    shortName: "RE",
+    title: "React Basics",
+    description:
+      "Learn components, props, state and React application fundamentals.",
+    level: "Beginner",
+    instructor: "LearnTrack Team",
+    lessons: 6,
+  },
+  {
+    id: 3,
+    shortName: "DB",
+    title: "Database Basics",
+    description:
+      "Understand databases, tables, relationships and basic SQL.",
+    level: "Beginner",
+    instructor: "LearnTrack Team",
+    lessons: 5,
+  },
+  {
+    id: 4,
+    shortName: "TS",
+    title: "TypeScript Basics",
+    description:
+      "Learn types, interfaces and TypeScript fundamentals.",
+    level: "Beginner",
+    instructor: "LearnTrack Team",
+    lessons: 5,
+  },
+];
