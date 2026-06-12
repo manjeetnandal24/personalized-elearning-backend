@@ -1,7 +1,9 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import type { NextFunction, Request, Response } from "express";
 
+import { prisma } from "./lib/prisma.js";
 import courseRouter from "./routes/courseRoutes.js";
 
 dotenv.config();
@@ -26,7 +28,37 @@ app.get("/api/health", (_request, response) => {
   });
 });
 
+app.get("/api/database-health", async (_request, response, next) => {
+  try {
+    const courseCount = await prisma.course.count();
+
+    response.json({
+      success: true,
+      message: "Database is connected",
+      courseCount,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.use("/api/courses", courseRouter);
+
+app.use(
+  (
+    error: unknown,
+    _request: Request,
+    response: Response,
+    _next: NextFunction,
+  ) => {
+    console.error(error);
+
+    response.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  },
+);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
