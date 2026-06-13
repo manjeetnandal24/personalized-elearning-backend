@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import type { NextFunction, Request, Response } from "express";
+import authRouter from "./routes/authRoutes.js";
 
 import { prisma } from "./lib/prisma.js";
 import courseRouter from "./routes/courseRoutes.js";
@@ -42,6 +43,7 @@ app.get("/api/database-health", async (_request, response, next) => {
   }
 });
 
+app.use("/api/auth", authRouter);
 app.use("/api/courses", courseRouter);
 
 app.use(
