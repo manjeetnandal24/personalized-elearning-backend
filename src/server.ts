@@ -7,6 +7,7 @@ import authRouter from "./routes/authRoutes.js";
 import { prisma } from "./lib/prisma.js";
 import courseRouter from "./routes/courseRoutes.js";
 import progressRouter from "./routes/progressRoutes.js";
+import dashboardRouter from "./routes/dashboardRoutes.js";
 
 dotenv.config();
 
@@ -47,6 +48,7 @@ app.get("/api/database-health", async (_request, response, next) => {
 app.use("/api/auth", authRouter);
 app.use("/api/courses", courseRouter);
 app.use("/api/progress", progressRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 app.use(
   (
