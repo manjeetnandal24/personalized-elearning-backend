@@ -47,7 +47,19 @@ adminRouter.post(
     try {
       const { title, description, shortName, level, instructor } = request.body;
 
-      if (!title || !description || !shortName || !level || !instructor) {
+      const titleText = String(title || "").trim();
+      const descriptionText = String(description || "").trim();
+      const shortNameText = String(shortName || "").trim().toUpperCase();
+      const levelText = String(level || "").trim();
+      const instructorText = String(instructor || "").trim();
+
+      if (
+        !titleText ||
+        !descriptionText ||
+        !shortNameText ||
+        !levelText ||
+        !instructorText
+      ) {
         response.status(400).json({
           success: false,
           message: "All course fields are required.",
@@ -58,11 +70,11 @@ adminRouter.post(
 
       const course = await prisma.course.create({
         data: {
-          title: String(title).trim(),
-          description: String(description).trim(),
-          shortName: String(shortName).trim().toUpperCase(),
-          level: String(level).trim(),
-          instructor: String(instructor).trim(),
+          title: titleText,
+          description: descriptionText,
+          shortName: shortNameText,
+          level: levelText,
+          instructor: instructorText,
         },
         include: {
           lessons: {
@@ -93,6 +105,12 @@ adminRouter.patch(
       const courseId = Number(request.params.courseId);
       const { title, description, shortName, level, instructor } = request.body;
 
+      const titleText = String(title || "").trim();
+      const descriptionText = String(description || "").trim();
+      const shortNameText = String(shortName || "").trim().toUpperCase();
+      const levelText = String(level || "").trim();
+      const instructorText = String(instructor || "").trim();
+
       if (Number.isNaN(courseId)) {
         response.status(400).json({
           success: false,
@@ -102,7 +120,13 @@ adminRouter.patch(
         return;
       }
 
-      if (!title || !description || !shortName || !level || !instructor) {
+      if (
+        !titleText ||
+        !descriptionText ||
+        !shortNameText ||
+        !levelText ||
+        !instructorText
+      ) {
         response.status(400).json({
           success: false,
           message: "All course fields are required.",
@@ -131,11 +155,11 @@ adminRouter.patch(
           id: courseId,
         },
         data: {
-          title: String(title).trim(),
-          description: String(description).trim(),
-          shortName: String(shortName).trim().toUpperCase(),
-          level: String(level).trim(),
-          instructor: String(instructor).trim(),
+          title: titleText,
+          description: descriptionText,
+          shortName: shortNameText,
+          level: levelText,
+          instructor: instructorText,
         },
         include: {
           lessons: {
@@ -237,7 +261,12 @@ adminRouter.post(
   async (request: AuthenticatedRequest, response, next) => {
     try {
       const courseId = Number(request.params.courseId);
-      const { title, description, duration } = request.body;
+      const { title, description, content, duration } = request.body;
+
+      const titleText = String(title || "").trim();
+      const descriptionText = String(description || "").trim();
+      const contentText = String(content || "").trim();
+      const durationText = String(duration || "").trim();
 
       if (Number.isNaN(courseId)) {
         response.status(400).json({
@@ -248,7 +277,7 @@ adminRouter.post(
         return;
       }
 
-      if (!title || !description || !duration) {
+      if (!titleText || !descriptionText || !contentText || !durationText) {
         response.status(400).json({
           success: false,
           message: "All lesson fields are required.",
@@ -280,9 +309,10 @@ adminRouter.post(
       const lesson = await prisma.lesson.create({
         data: {
           courseId,
-          title: String(title).trim(),
-          description: String(description).trim(),
-          duration: String(duration).trim(),
+          title: titleText,
+          description: descriptionText,
+          content: contentText,
+          duration: durationText,
           position: nextPosition,
         },
       });
@@ -290,6 +320,76 @@ adminRouter.post(
       response.status(201).json({
         success: true,
         message: "Lesson added successfully.",
+        data: {
+          lesson,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+adminRouter.patch(
+  "/lessons/:lessonId",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const lessonId = Number(request.params.lessonId);
+      const { title, description, content, duration } = request.body;
+
+      const titleText = String(title || "").trim();
+      const descriptionText = String(description || "").trim();
+      const contentText = String(content || "").trim();
+      const durationText = String(duration || "").trim();
+
+      if (Number.isNaN(lessonId)) {
+        response.status(400).json({
+          success: false,
+          message: "Invalid lesson ID.",
+        });
+
+        return;
+      }
+
+      if (!titleText || !descriptionText || !contentText || !durationText) {
+        response.status(400).json({
+          success: false,
+          message: "All lesson fields are required.",
+        });
+
+        return;
+      }
+
+      const existingLesson = await prisma.lesson.findUnique({
+        where: {
+          id: lessonId,
+        },
+      });
+
+      if (!existingLesson) {
+        response.status(404).json({
+          success: false,
+          message: "Lesson not found.",
+        });
+
+        return;
+      }
+
+      const lesson = await prisma.lesson.update({
+        where: {
+          id: lessonId,
+        },
+        data: {
+          title: titleText,
+          description: descriptionText,
+          content: contentText,
+          duration: durationText,
+        },
+      });
+
+      response.json({
+        success: true,
+        message: "Lesson updated successfully.",
         data: {
           lesson,
         },
