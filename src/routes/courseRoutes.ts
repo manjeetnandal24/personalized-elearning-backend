@@ -8,7 +8,7 @@ courseRouter.get("/", async (_request, response, next) => {
   try {
     const courses = await prisma.course.findMany({
       orderBy: {
-        id: "asc",
+        createdAt: "desc",
       },
       include: {
         lessons: {
@@ -16,13 +16,26 @@ courseRouter.get("/", async (_request, response, next) => {
             position: "asc",
           },
         },
+        topics: {
+          orderBy: {
+            position: "asc",
+          },
+          include: {
+            lessons: {
+              orderBy: {
+                position: "asc",
+              },
+            },
+          },
+        },
       },
     });
 
     response.json({
       success: true,
-      count: courses.length,
-      data: courses,
+      data: {
+        courses,
+      },
     });
   } catch (error) {
     next(error);
@@ -36,7 +49,7 @@ courseRouter.get("/:courseId", async (request, response, next) => {
     if (Number.isNaN(courseId)) {
       response.status(400).json({
         success: false,
-        message: "Invalid course ID",
+        message: "Invalid course ID.",
       });
 
       return;
@@ -52,13 +65,25 @@ courseRouter.get("/:courseId", async (request, response, next) => {
             position: "asc",
           },
         },
+        topics: {
+          orderBy: {
+            position: "asc",
+          },
+          include: {
+            lessons: {
+              orderBy: {
+                position: "asc",
+              },
+            },
+          },
+        },
       },
     });
 
     if (!course) {
       response.status(404).json({
         success: false,
-        message: "Course not found",
+        message: "Course not found.",
       });
 
       return;
@@ -66,7 +91,9 @@ courseRouter.get("/:courseId", async (request, response, next) => {
 
     response.json({
       success: true,
-      data: course,
+      data: {
+        course,
+      },
     });
   } catch (error) {
     next(error);

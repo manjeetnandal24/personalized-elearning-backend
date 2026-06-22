@@ -35,23 +35,37 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  topics      Topic[]
   lessons     Lesson[]
   enrollments Enrollment[]
 }
 
-model Lesson {
+model Topic {
   id          Int      @id @default(autoincrement())
   title       String
   description String
-  content     String   @default("")
+  position    Int
+  courseId    Int
+  course      Course   @relation(fields: [courseId], references: [id])
+  lessons     Lesson[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Lesson {
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String
+  content     String     @default("")
   duration    String
   position    Int
   courseId    Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  course   Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  progress Progress[]
+  topicId     Int?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  course      Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  topic       Topic?     @relation(fields: [topicId], references: [id])
+  progress    Progress[]
 
   @@unique([courseId, position])
 }

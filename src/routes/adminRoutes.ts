@@ -12,6 +12,26 @@ const adminRouter = Router();
 adminRouter.use(authenticateUser);
 adminRouter.use(requireAdmin);
 
+const courseInclude = {
+  lessons: {
+    orderBy: {
+      position: "asc" as const,
+    },
+  },
+  topics: {
+    orderBy: {
+      position: "asc" as const,
+    },
+    include: {
+      lessons: {
+        orderBy: {
+          position: "asc" as const,
+        },
+      },
+    },
+  },
+};
+
 adminRouter.get(
   "/courses",
   async (_request: AuthenticatedRequest, response, next) => {
@@ -20,13 +40,7 @@ adminRouter.get(
         orderBy: {
           createdAt: "desc",
         },
-        include: {
-          lessons: {
-            orderBy: {
-              position: "asc",
-            },
-          },
-        },
+        include: courseInclude,
       });
 
       response.json({
@@ -76,13 +90,7 @@ adminRouter.post(
           level: levelText,
           instructor: instructorText,
         },
-        include: {
-          lessons: {
-            orderBy: {
-              position: "asc",
-            },
-          },
-        },
+        include: courseInclude,
       });
 
       response.status(201).json({
@@ -161,13 +169,7 @@ adminRouter.patch(
           level: levelText,
           instructor: instructorText,
         },
-        include: {
-          lessons: {
-            orderBy: {
-              position: "asc",
-            },
-          },
-        },
+        include: courseInclude,
       });
 
       response.json({
@@ -204,6 +206,7 @@ adminRouter.delete(
         },
         include: {
           lessons: true,
+          topics: true,
         },
       });
 
@@ -239,6 +242,12 @@ adminRouter.delete(
           },
         });
 
+        await transaction.topic.deleteMany({
+          where: {
+            courseId,
+          },
+        });
+
         await transaction.course.delete({
           where: {
             id: courseId,
@@ -257,21 +266,112 @@ adminRouter.delete(
 );
 
 adminRouter.post(
+  "/courses/:courseId/topics",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const courseId = Number(request.params.courseId);
+      const { title, description } = request.body;
+
+      const titleText = String(title || "").trim();
+      const descriptionText = String(description || "").trim();
+
+      if (Number.isNaN(courseId)) {
+        response.status(400).json({
+          success: false,
+          message: "Invalid course ID.",
+        });
+
+        return;
+      }
+
+      if (!titleText || !descriptionText) {
+        response.status(400).json({
+          success: false,
+          message: "Topic title and description are required.",
+        });
+
+        return;
+      }
+
+      const course = await prisma.course.findUnique({
+        where: {
+          id: courseId,
+        },
+        include: {
+          topics: true,
+        },
+      });
+
+      if (!course) {
+        response.status(404).json({
+          success: false,
+          message: "Course not found.",
+        });
+
+        return;
+      }
+
+      const nextPosition = course.topics.length + 1;
+
+      const topic = await prisma.topic.create({
+        data: {
+          courseId,
+          title: titleText,
+          description: descriptionText,
+          position: nextPosition,
+        },
+        include: {
+          lessons: {
+            orderBy: {
+              position: "asc",
+            },
+          },
+        },
+      });
+
+      response.status(201).json({
+        success: true,
+        message: "Topic created successfully.",
+        data: {
+          topic,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+adminRouter.post(
   "/courses/:courseId/lessons",
   async (request: AuthenticatedRequest, response, next) => {
     try {
       const courseId = Number(request.params.courseId);
-      const { title, description, content, duration } = request.body;
+      const { title, description, content, duration, topicId } = request.body;
 
       const titleText = String(title || "").trim();
       const descriptionText = String(description || "").trim();
       const contentText = String(content || "").trim();
       const durationText = String(duration || "").trim();
 
+      const topicIdNumber =
+        topicId === undefined || topicId === "" || topicId === null
+          ? null
+          : Number(topicId);
+
       if (Number.isNaN(courseId)) {
         response.status(400).json({
           success: false,
           message: "Invalid course ID.",
+        });
+
+        return;
+      }
+
+      if (topicIdNumber !== null && Number.isNaN(topicIdNumber)) {
+        response.status(400).json({
+          success: false,
+          message: "Invalid topic ID.",
         });
 
         return;
@@ -304,11 +404,30 @@ adminRouter.post(
         return;
       }
 
+      if (topicIdNumber !== null) {
+        const topic = await prisma.topic.findFirst({
+          where: {
+            id: topicIdNumber,
+            courseId,
+          },
+        });
+
+        if (!topic) {
+          response.status(404).json({
+            success: false,
+            message: "Topic not found for this course.",
+          });
+
+          return;
+        }
+      }
+
       const nextPosition = course.lessons.length + 1;
 
       const lesson = await prisma.lesson.create({
         data: {
           courseId,
+          topicId: topicIdNumber,
           title: titleText,
           description: descriptionText,
           content: contentText,
@@ -335,17 +454,31 @@ adminRouter.patch(
   async (request: AuthenticatedRequest, response, next) => {
     try {
       const lessonId = Number(request.params.lessonId);
-      const { title, description, content, duration } = request.body;
+      const { title, description, content, duration, topicId } = request.body;
 
       const titleText = String(title || "").trim();
       const descriptionText = String(description || "").trim();
       const contentText = String(content || "").trim();
       const durationText = String(duration || "").trim();
 
+      const topicIdNumber =
+        topicId === undefined || topicId === "" || topicId === null
+          ? null
+          : Number(topicId);
+
       if (Number.isNaN(lessonId)) {
         response.status(400).json({
           success: false,
           message: "Invalid lesson ID.",
+        });
+
+        return;
+      }
+
+      if (topicIdNumber !== null && Number.isNaN(topicIdNumber)) {
+        response.status(400).json({
+          success: false,
+          message: "Invalid topic ID.",
         });
 
         return;
@@ -375,6 +508,24 @@ adminRouter.patch(
         return;
       }
 
+      if (topicIdNumber !== null) {
+        const topic = await prisma.topic.findFirst({
+          where: {
+            id: topicIdNumber,
+            courseId: existingLesson.courseId,
+          },
+        });
+
+        if (!topic) {
+          response.status(404).json({
+            success: false,
+            message: "Topic not found for this course.",
+          });
+
+          return;
+        }
+      }
+
       const lesson = await prisma.lesson.update({
         where: {
           id: lessonId,
@@ -384,6 +535,7 @@ adminRouter.patch(
           description: descriptionText,
           content: contentText,
           duration: durationText,
+          topicId: topicIdNumber,
         },
       });
 
