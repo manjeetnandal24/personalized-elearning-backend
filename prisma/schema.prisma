@@ -21,8 +21,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  enrollments Enrollment[]
-  progress    Progress[]
+  enrollments  Enrollment[]
+  progress     Progress[]
+  quizAttempts QuizAttempt[]
 }
 
 model Course {
@@ -38,6 +39,7 @@ model Course {
   topics      Topic[]
   lessons     Lesson[]
   enrollments Enrollment[]
+  quizzes     Quiz[]
 }
 
 model Topic {
@@ -50,6 +52,7 @@ model Topic {
   lessons     Lesson[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  quizzes     Quiz[]
 }
 
 model Lesson {
@@ -94,4 +97,53 @@ model Progress {
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lessonId])
+}
+
+model Quiz {
+  id           Int            @id @default(autoincrement())
+  title        String
+  description  String
+  passingScore Int            @default(60)
+  courseId     Int
+  topicId      Int?
+  course       Course         @relation(fields: [courseId], references: [id])
+  topic        Topic?         @relation(fields: [topicId], references: [id])
+  questions    QuizQuestion[]
+  attempts     QuizAttempt[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model QuizQuestion {
+  id            Int      @id @default(autoincrement())
+  question      String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctOption String
+  explanation   String   @default("")
+  points        Int      @default(1)
+  position      Int
+  quizId        Int
+  quiz          Quiz     @relation(fields: [quizId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model QuizAttempt {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  quizId          Int
+  score           Int
+  totalQuestions  Int
+  correctAnswers  Int
+  passed          Boolean
+  selectedAnswers Json
+  user            User     @relation(fields: [userId], references: [id])
+  quiz            Quiz     @relation(fields: [quizId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, quizId])
 }

@@ -9,6 +9,7 @@ import courseRouter from "./routes/courseRoutes.js";
 import progressRouter from "./routes/progressRoutes.js";
 import dashboardRouter from "./routes/dashboardRoutes.js";
 import adminRouter from "./routes/adminRoutes.js";
+import quizRouter from "./routes/quizRoutes.js";
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ app.use("/api/courses", courseRouter);
 app.use("/api/progress", progressRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/quizzes", quizRouter);
 
 app.use(
   (
