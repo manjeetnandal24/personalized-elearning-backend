@@ -99,6 +99,74 @@ dashboardRouter.get(
         dashboardCourses[0] ||
         null;
 
+      const quizAttempts = await prisma.quizAttempt.findMany({
+        where: {
+          userId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          quiz: {
+            select: {
+              id: true,
+              title: true,
+              passingScore: true,
+              courseId: true,
+              topicId: true,
+              course: {
+                select: {
+                  id: true,
+                  title: true,
+                  shortName: true,
+                },
+              },
+              topic: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const totalQuizAttempts = quizAttempts.length;
+
+      const passedQuizAttempts = quizAttempts.filter(
+        (attempt) => attempt.passed,
+      ).length;
+
+      const failedQuizAttempts = totalQuizAttempts - passedQuizAttempts;
+
+      const averageQuizScore =
+        totalQuizAttempts === 0
+          ? 0
+          : Math.round(
+              quizAttempts.reduce((total, attempt) => total + attempt.score, 0) /
+                totalQuizAttempts,
+            );
+
+      const uniqueQuizIds = new Set(
+        quizAttempts.map((attempt) => attempt.quizId),
+      );
+
+      const recentQuizAttempts = quizAttempts.slice(0, 5).map((attempt) => ({
+        id: attempt.id,
+        quizId: attempt.quizId,
+        quizTitle: attempt.quiz.title,
+        courseId: attempt.quiz.course.id,
+        courseTitle: attempt.quiz.course.title,
+        courseShortName: attempt.quiz.course.shortName,
+        topicTitle: attempt.quiz.topic?.title || null,
+        score: attempt.score,
+        totalQuestions: attempt.totalQuestions,
+        correctAnswers: attempt.correctAnswers,
+        passed: attempt.passed,
+        createdAt: attempt.createdAt,
+      }));
+
       response.json({
         success: true,
         data: {
@@ -108,6 +176,14 @@ dashboardRouter.get(
           overallProgress,
           continueLearning,
           courses: dashboardCourses,
+          quizAnalytics: {
+            totalAttempts: totalQuizAttempts,
+            uniqueQuizzesAttempted: uniqueQuizIds.size,
+            passedAttempts: passedQuizAttempts,
+            failedAttempts: failedQuizAttempts,
+            averageScore: averageQuizScore,
+            recentAttempts: recentQuizAttempts,
+          },
         },
       });
     } catch (error) {
