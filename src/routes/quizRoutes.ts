@@ -403,6 +403,34 @@ quizRouter.post(
         return;
       }
 
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!user) {
+        response.status(404).json({
+          success: false,
+          message: "User not found.",
+        });
+
+        return;
+      }
+
+      if (user.role === "ADMIN") {
+        response.status(403).json({
+          success: false,
+          message: "Admins cannot submit student quizzes.",
+        });
+
+        return;
+      }
+
       if (!Array.isArray(answers)) {
         response.status(400).json({
           success: false,
@@ -429,6 +457,24 @@ quizRouter.post(
         response.status(404).json({
           success: false,
           message: "Quiz not found.",
+        });
+
+        return;
+      }
+
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          userId_courseId: {
+            userId,
+            courseId: quiz.courseId,
+          },
+        },
+      });
+
+      if (!enrollment) {
+        response.status(403).json({
+          success: false,
+          message: "Please enroll in this course before attempting quizzes.",
         });
 
         return;

@@ -34,6 +34,34 @@ progressRouter.get(
         return;
       }
 
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!user) {
+        response.status(404).json({
+          success: false,
+          message: "User not found.",
+        });
+
+        return;
+      }
+
+      if (user.role === "ADMIN") {
+        response.status(403).json({
+          success: false,
+          message: "Admins cannot track student progress.",
+        });
+
+        return;
+      }
+
       const course = await prisma.course.findUnique({
         where: {
           id: courseId,
@@ -56,19 +84,23 @@ progressRouter.get(
         return;
       }
 
-      await prisma.enrollment.upsert({
+      const enrollment = await prisma.enrollment.findUnique({
         where: {
           userId_courseId: {
             userId,
             courseId,
           },
         },
-        update: {},
-        create: {
-          userId,
-          courseId,
-        },
       });
+
+      if (!enrollment) {
+        response.status(403).json({
+          success: false,
+          message: "Please enroll in this course first.",
+        });
+
+        return;
+      }
 
       const lessonIds = course.lessons.map((lesson) => lesson.id);
 
@@ -136,6 +168,34 @@ progressRouter.post(
         return;
       }
 
+      const user = await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        select: {
+          id: true,
+          role: true,
+        },
+      });
+
+      if (!user) {
+        response.status(404).json({
+          success: false,
+          message: "User not found.",
+        });
+
+        return;
+      }
+
+      if (user.role === "ADMIN") {
+        response.status(403).json({
+          success: false,
+          message: "Admins cannot track student progress.",
+        });
+
+        return;
+      }
+
       const lesson = await prisma.lesson.findUnique({
         where: {
           id: lessonId,
@@ -158,19 +218,23 @@ progressRouter.post(
         return;
       }
 
-      await prisma.enrollment.upsert({
+      const enrollment = await prisma.enrollment.findUnique({
         where: {
           userId_courseId: {
             userId,
             courseId: lesson.courseId,
           },
         },
-        update: {},
-        create: {
-          userId,
-          courseId: lesson.courseId,
-        },
       });
+
+      if (!enrollment) {
+        response.status(403).json({
+          success: false,
+          message: "Please enroll in this course first.",
+        });
+
+        return;
+      }
 
       const existingProgress = await prisma.progress.findUnique({
         where: {
