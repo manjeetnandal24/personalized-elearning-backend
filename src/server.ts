@@ -11,6 +11,7 @@ import dashboardRouter from "./routes/dashboardRoutes.js";
 import adminRouter from "./routes/adminRoutes.js";
 import quizRouter from "./routes/quizRoutes.js";
 import enrollmentRouter from "./routes/enrollmentRoutes.js";
+import certificateRouter from "./routes/certificateRoutes.js";
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/quizzes", quizRouter);
 app.use("/api/enrollments", enrollmentRouter);
+app.use("/api/certificates", certificateRouter);
 
 app.use(
   (

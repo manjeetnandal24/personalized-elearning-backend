@@ -24,6 +24,7 @@ model User {
   enrollments  Enrollment[]
   progress     Progress[]
   quizAttempts QuizAttempt[]
+  certificates Certificate[]
 }
 
 model Course {
@@ -36,10 +37,12 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  topics      Topic[]
-  lessons     Lesson[]
-  enrollments Enrollment[]
-  quizzes     Quiz[]
+  topics              Topic[]
+  lessons             Lesson[]
+  enrollments         Enrollment[]
+  quizzes             Quiz[]
+  certificateTemplate CertificateTemplate?
+  certificates        Certificate[]
 }
 
 model Topic {
@@ -146,4 +149,36 @@ model QuizAttempt {
   updatedAt       DateTime @updatedAt
 
   @@index([userId, quizId])
+}
+
+model CertificateTemplate {
+  id             Int      @id @default(autoincrement())
+  courseId       Int      @unique
+  title          String   @default("Certificate of Completion")
+  subtitle       String   @default("This certificate is proudly presented to")
+  bodyText       String   @default("for successfully completing the course")
+  footerText     String   @default("Keep learning and growing with LearnTrack.")
+  signatoryName  String   @default("Course Instructor")
+  signatoryTitle String   @default("Instructor")
+  brandColor     String   @default("#2563eb")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+}
+
+model Certificate {
+  id              Int      @id @default(autoincrement())
+  certificateCode String   @unique
+  userId          Int
+  courseId        Int
+  issuedAt        DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
 }
