@@ -33,6 +33,7 @@ model Course {
   title       String
   description String
   level       String
+  category    String   @default("General")
   instructor  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

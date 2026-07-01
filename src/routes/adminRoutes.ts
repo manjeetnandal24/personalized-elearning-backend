@@ -12,111 +12,114 @@ const adminRouter = Router();
 adminRouter.use(authenticateUser);
 adminRouter.use(requireAdmin);
 
-const courseInclude = {
-  lessons: {
-    orderBy: {
-      position: "asc" as const,
+function getCourseInclude() {
+  return {
+    lessons: {
+      orderBy: {
+        position: "asc" as const,
+      },
     },
-  },
-  topics: {
-    orderBy: {
-      position: "asc" as const,
-    },
-    include: {
-      lessons: {
-        orderBy: {
-          position: "asc" as const,
+    topics: {
+      orderBy: {
+        position: "asc" as const,
+      },
+      include: {
+        lessons: {
+          orderBy: {
+            position: "asc" as const,
+          },
         },
       },
     },
-  },
-};
+  };
+}
 
-adminRouter.get(
-  "/courses",
-  async (_request: AuthenticatedRequest, response, next) => {
-    try {
-      const courses = await prisma.course.findMany({
-        orderBy: {
-          createdAt: "desc",
-        },
-        include: courseInclude,
+adminRouter.get("/courses", async (_request: AuthenticatedRequest, response, next) => {
+  try {
+    const courses = await prisma.course.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: getCourseInclude(),
+    });
+
+    response.json({
+      success: true,
+      data: {
+        courses,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRouter.post("/courses", async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const { title, description, shortName, level, category, instructor } =
+      request.body;
+
+    const titleText = String(title || "").trim();
+    const descriptionText = String(description || "").trim();
+    const shortNameText = String(shortName || "").trim();
+    const levelText = String(level || "").trim();
+    const categoryText = String(category || "General").trim();
+    const instructorText = String(instructor || "").trim();
+
+    if (
+      !titleText ||
+      !descriptionText ||
+      !shortNameText ||
+      !levelText ||
+      !categoryText ||
+      !instructorText
+    ) {
+      response.status(400).json({
+        success: false,
+        message: "All course fields are required.",
       });
 
-      response.json({
-        success: true,
-        data: {
-          courses,
-        },
-      });
-    } catch (error) {
-      next(error);
+      return;
     }
-  },
-);
 
-adminRouter.post(
-  "/courses",
-  async (request: AuthenticatedRequest, response, next) => {
-    try {
-      const { title, description, shortName, level, instructor } = request.body;
+    const course = await prisma.course.create({
+      data: {
+        title: titleText,
+        description: descriptionText,
+        shortName: shortNameText,
+        level: levelText,
+        category: categoryText,
+        instructor: instructorText,
+      },
+      include: getCourseInclude(),
+    });
 
-      const titleText = String(title || "").trim();
-      const descriptionText = String(description || "").trim();
-      const shortNameText = String(shortName || "").trim().toUpperCase();
-      const levelText = String(level || "").trim();
-      const instructorText = String(instructor || "").trim();
-
-      if (
-        !titleText ||
-        !descriptionText ||
-        !shortNameText ||
-        !levelText ||
-        !instructorText
-      ) {
-        response.status(400).json({
-          success: false,
-          message: "All course fields are required.",
-        });
-
-        return;
-      }
-
-      const course = await prisma.course.create({
-        data: {
-          title: titleText,
-          description: descriptionText,
-          shortName: shortNameText,
-          level: levelText,
-          instructor: instructorText,
-        },
-        include: courseInclude,
-      });
-
-      response.status(201).json({
-        success: true,
-        message: "Course created successfully.",
-        data: {
-          course,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    response.status(201).json({
+      success: true,
+      message: "Course created successfully.",
+      data: {
+        course,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 adminRouter.patch(
   "/courses/:courseId",
   async (request: AuthenticatedRequest, response, next) => {
     try {
       const courseId = Number(request.params.courseId);
-      const { title, description, shortName, level, instructor } = request.body;
+
+      const { title, description, shortName, level, category, instructor } =
+        request.body;
 
       const titleText = String(title || "").trim();
       const descriptionText = String(description || "").trim();
-      const shortNameText = String(shortName || "").trim().toUpperCase();
+      const shortNameText = String(shortName || "").trim();
       const levelText = String(level || "").trim();
+      const categoryText = String(category || "General").trim();
       const instructorText = String(instructor || "").trim();
 
       if (Number.isNaN(courseId)) {
@@ -133,6 +136,7 @@ adminRouter.patch(
         !descriptionText ||
         !shortNameText ||
         !levelText ||
+        !categoryText ||
         !instructorText
       ) {
         response.status(400).json({
@@ -167,9 +171,10 @@ adminRouter.patch(
           description: descriptionText,
           shortName: shortNameText,
           level: levelText,
+          category: categoryText,
           instructor: instructorText,
         },
-        include: courseInclude,
+        include: getCourseInclude(),
       });
 
       response.json({
@@ -204,10 +209,6 @@ adminRouter.delete(
         where: {
           id: courseId,
         },
-        include: {
-          lessons: true,
-          topics: true,
-        },
       });
 
       if (!course) {
@@ -219,41 +220,95 @@ adminRouter.delete(
         return;
       }
 
-      const lessonIds = course.lessons.map((lesson) => lesson.id);
+      const lessons = await prisma.lesson.findMany({
+        where: {
+          courseId,
+        },
+        select: {
+          id: true,
+        },
+      });
 
-      await prisma.$transaction(async (transaction) => {
-        await transaction.progress.deleteMany({
+      const lessonIds = lessons.map((lesson) => lesson.id);
+
+      const quizzes = await prisma.quiz.findMany({
+        where: {
+          courseId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const quizIds = quizzes.map((quiz) => quiz.id);
+
+      await prisma.$transaction([
+        prisma.progress.deleteMany({
           where: {
             lessonId: {
               in: lessonIds,
             },
           },
-        });
+        }),
 
-        await transaction.enrollment.deleteMany({
+        prisma.quizAttempt.deleteMany({
+          where: {
+            quizId: {
+              in: quizIds,
+            },
+          },
+        }),
+
+        prisma.quizQuestion.deleteMany({
+          where: {
+            quizId: {
+              in: quizIds,
+            },
+          },
+        }),
+
+        prisma.quiz.deleteMany({
           where: {
             courseId,
           },
-        });
+        }),
 
-        await transaction.lesson.deleteMany({
+        prisma.certificate.deleteMany({
           where: {
             courseId,
           },
-        });
+        }),
 
-        await transaction.topic.deleteMany({
+        prisma.certificateTemplate.deleteMany({
           where: {
             courseId,
           },
-        });
+        }),
 
-        await transaction.course.delete({
+        prisma.enrollment.deleteMany({
+          where: {
+            courseId,
+          },
+        }),
+
+        prisma.lesson.deleteMany({
+          where: {
+            courseId,
+          },
+        }),
+
+        prisma.topic.deleteMany({
+          where: {
+            courseId,
+          },
+        }),
+
+        prisma.course.delete({
           where: {
             id: courseId,
           },
-        });
-      });
+        }),
+      ]);
 
       response.json({
         success: true,
@@ -315,10 +370,10 @@ adminRouter.post(
 
       const topic = await prisma.topic.create({
         data: {
-          courseId,
           title: titleText,
           description: descriptionText,
           position: nextPosition,
+          courseId,
         },
         include: {
           lessons: {
@@ -347,6 +402,7 @@ adminRouter.post(
   async (request: AuthenticatedRequest, response, next) => {
     try {
       const courseId = Number(request.params.courseId);
+
       const { title, description, content, duration, topicId } = request.body;
 
       const titleText = String(title || "").trim();
@@ -368,19 +424,19 @@ adminRouter.post(
         return;
       }
 
-      if (topicIdNumber !== null && Number.isNaN(topicIdNumber)) {
+      if (!titleText || !descriptionText || !durationText) {
         response.status(400).json({
           success: false,
-          message: "Invalid topic ID.",
+          message: "Lesson title, description and duration are required.",
         });
 
         return;
       }
 
-      if (!titleText || !descriptionText || !contentText || !durationText) {
+      if (topicIdNumber !== null && Number.isNaN(topicIdNumber)) {
         response.status(400).json({
           success: false,
-          message: "All lesson fields are required.",
+          message: "Invalid topic ID.",
         });
 
         return;
@@ -426,13 +482,13 @@ adminRouter.post(
 
       const lesson = await prisma.lesson.create({
         data: {
-          courseId,
-          topicId: topicIdNumber,
           title: titleText,
           description: descriptionText,
           content: contentText,
           duration: durationText,
           position: nextPosition,
+          courseId,
+          topicId: topicIdNumber,
         },
       });
 
@@ -454,6 +510,7 @@ adminRouter.patch(
   async (request: AuthenticatedRequest, response, next) => {
     try {
       const lessonId = Number(request.params.lessonId);
+
       const { title, description, content, duration, topicId } = request.body;
 
       const titleText = String(title || "").trim();
@@ -475,19 +532,19 @@ adminRouter.patch(
         return;
       }
 
-      if (topicIdNumber !== null && Number.isNaN(topicIdNumber)) {
+      if (!titleText || !descriptionText || !durationText) {
         response.status(400).json({
           success: false,
-          message: "Invalid topic ID.",
+          message: "Lesson title, description and duration are required.",
         });
 
         return;
       }
 
-      if (!titleText || !descriptionText || !contentText || !durationText) {
+      if (topicIdNumber !== null && Number.isNaN(topicIdNumber)) {
         response.status(400).json({
           success: false,
-          message: "All lesson fields are required.",
+          message: "Invalid topic ID.",
         });
 
         return;
@@ -519,7 +576,7 @@ adminRouter.patch(
         if (!topic) {
           response.status(404).json({
             success: false,
-            message: "Topic not found for this course.",
+            message: "Topic not found for this lesson course.",
           });
 
           return;
@@ -582,39 +639,19 @@ adminRouter.delete(
         return;
       }
 
-      await prisma.$transaction(async (transaction) => {
-        await transaction.progress.deleteMany({
+      await prisma.$transaction([
+        prisma.progress.deleteMany({
           where: {
             lessonId,
           },
-        });
+        }),
 
-        await transaction.lesson.delete({
+        prisma.lesson.delete({
           where: {
             id: lessonId,
           },
-        });
-
-        const remainingLessons = await transaction.lesson.findMany({
-          where: {
-            courseId: lesson.courseId,
-          },
-          orderBy: {
-            position: "asc",
-          },
-        });
-
-        for (const [index, remainingLesson] of remainingLessons.entries()) {
-          await transaction.lesson.update({
-            where: {
-              id: remainingLesson.id,
-            },
-            data: {
-              position: index + 1,
-            },
-          });
-        }
-      });
+        }),
+      ]);
 
       response.json({
         success: true,
