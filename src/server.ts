@@ -12,6 +12,7 @@ import adminRouter from "./routes/adminRoutes.js";
 import quizRouter from "./routes/quizRoutes.js";
 import enrollmentRouter from "./routes/enrollmentRoutes.js";
 import certificateRouter from "./routes/certificateRoutes.js";
+import adminAnalyticsRouter from "./routes/adminAnalyticsRoutes.js";
 
 dotenv.config();
 
@@ -57,6 +58,7 @@ app.use("/api/admin", adminRouter);
 app.use("/api/quizzes", quizRouter);
 app.use("/api/enrollments", enrollmentRouter);
 app.use("/api/certificates", certificateRouter);
+app.use("/api/admin/analytics", adminAnalyticsRouter);
 
 app.use(
   (
