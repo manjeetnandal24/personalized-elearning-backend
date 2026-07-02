@@ -1,16 +1,25 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 
+import { prisma } from "../lib/prisma.js";
+
 export type AuthUser = {
   userId: number;
   email: string;
+  role: "STUDENT" | "INSTRUCTOR" | "ADMIN";
+};
+
+type TokenPayload = {
+  userId: number;
+  email?: string;
+  role?: "STUDENT" | "INSTRUCTOR" | "ADMIN";
 };
 
 export type AuthenticatedRequest = Request & {
   user?: AuthUser;
 };
 
-export function authenticateUser(
+export async function authenticateUser(
   request: AuthenticatedRequest,
   response: Response,
   next: NextFunction,
@@ -39,11 +48,41 @@ export function authenticateUser(
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as AuthUser;
+    const decoded = jwt.verify(token, jwtSecret) as TokenPayload;
+
+    if (!decoded.userId) {
+      response.status(401).json({
+        success: false,
+        message: "Invalid token payload.",
+      });
+
+      return;
+    }
+
+    const freshUser = await prisma.user.findUnique({
+      where: {
+        id: decoded.userId,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    if (!freshUser) {
+      response.status(401).json({
+        success: false,
+        message: "User account no longer exists.",
+      });
+
+      return;
+    }
 
     request.user = {
-      userId: decoded.userId,
-      email: decoded.email,
+      userId: freshUser.id,
+      email: freshUser.email,
+      role: freshUser.role,
     };
 
     next();

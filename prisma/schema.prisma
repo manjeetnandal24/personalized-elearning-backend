@@ -9,6 +9,7 @@ datasource db {
 
 enum UserRole {
   STUDENT
+  INSTRUCTOR
   ADMIN
 }
 
@@ -25,6 +26,8 @@ model User {
   progress     Progress[]
   quizAttempts QuizAttempt[]
   certificates Certificate[]
+
+  teachingCourses Course[] @relation("CourseInstructor")
 }
 
 model Course {
@@ -35,6 +38,10 @@ model Course {
   level       String
   category    String   @default("General")
   instructor  String
+
+  instructorId   Int?
+  instructorUser User? @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: SetNull)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

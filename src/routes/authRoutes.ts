@@ -6,7 +6,11 @@ import { prisma } from "../lib/prisma.js";
 
 const authRouter = Router();
 
-function createToken(userId: number, email: string) {
+function createToken(
+  userId: number,
+  email: string,
+  role: "STUDENT" | "INSTRUCTOR" | "ADMIN",
+) {
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
@@ -17,6 +21,7 @@ function createToken(userId: number, email: string) {
     {
       userId,
       email,
+      role,
     },
     jwtSecret,
     {
@@ -101,7 +106,7 @@ authRouter.post("/register", async (request, response, next) => {
       },
     });
 
-    const token = createToken(user.id, user.email);
+    const token = createToken(user.id, user.email, user.role);
 
     response.status(201).json({
       success: true,
@@ -161,7 +166,7 @@ authRouter.post("/login", async (request, response, next) => {
       return;
     }
 
-    const token = createToken(user.id, user.email);
+    const token = createToken(user.id, user.email, user.role);
 
     response.json({
       success: true,
