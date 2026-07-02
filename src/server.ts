@@ -14,6 +14,7 @@ import enrollmentRouter from "./routes/enrollmentRoutes.js";
 import certificateRouter from "./routes/certificateRoutes.js";
 import adminAnalyticsRouter from "./routes/adminAnalyticsRoutes.js";
 import profileRouter from "./routes/profileRoutes.js";
+import adminStudentRouter from "./routes/adminStudentRoutes.js";
 
 dotenv.config();
 
@@ -61,6 +62,7 @@ app.use("/api/enrollments", enrollmentRouter);
 app.use("/api/certificates", certificateRouter);
 app.use("/api/admin/analytics", adminAnalyticsRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/admin/students", adminStudentRouter);
 
 app.use(
   (
