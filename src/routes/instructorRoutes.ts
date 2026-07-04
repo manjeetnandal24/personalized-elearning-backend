@@ -855,4 +855,244 @@ instructorRouter.delete(
   },
 );
 
+instructorRouter.get(
+  "/students",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      const courses = await prisma.course.findMany({
+        where: {
+          instructorId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          lessons: {
+            select: {
+              id: true,
+            },
+          },
+          enrollments: {
+            orderBy: {
+              enrolledAt: "desc",
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  createdAt: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const courseIds = courses.map((course) => course.id);
+      const lessonIds = courses.flatMap((course) =>
+        course.lessons.map((lesson) => lesson.id),
+      );
+
+      const studentIds = Array.from(
+        new Set(
+          courses.flatMap((course) =>
+            course.enrollments.map((enrollment) => enrollment.userId),
+          ),
+        ),
+      );
+
+      const completedProgress =
+        studentIds.length === 0 || lessonIds.length === 0
+          ? []
+          : await prisma.progress.findMany({
+              where: {
+                userId: {
+                  in: studentIds,
+                },
+                lessonId: {
+                  in: lessonIds,
+                },
+                isCompleted: true,
+              },
+              select: {
+                userId: true,
+                lessonId: true,
+              },
+            });
+
+      const quizAttempts =
+        studentIds.length === 0 || courseIds.length === 0
+          ? []
+          : await prisma.quizAttempt.findMany({
+              where: {
+                userId: {
+                  in: studentIds,
+                },
+                quiz: {
+                  courseId: {
+                    in: courseIds,
+                  },
+                },
+              },
+              select: {
+                id: true,
+                userId: true,
+                score: true,
+                passed: true,
+                createdAt: true,
+                quiz: {
+                  select: {
+                    courseId: true,
+                    title: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+            });
+
+      const certificates =
+        studentIds.length === 0 || courseIds.length === 0
+          ? []
+          : await prisma.certificate.findMany({
+              where: {
+                userId: {
+                  in: studentIds,
+                },
+                courseId: {
+                  in: courseIds,
+                },
+              },
+              select: {
+                id: true,
+                userId: true,
+                courseId: true,
+                certificateCode: true,
+                issuedAt: true,
+              },
+            });
+
+      const courseStudentGroups = courses.map((course) => {
+        const courseLessonIds = new Set(
+          course.lessons.map((lesson) => lesson.id),
+        );
+
+        const students = course.enrollments.map((enrollment) => {
+          const studentCompletedLessons = completedProgress.filter(
+            (progress) =>
+              progress.userId === enrollment.userId &&
+              courseLessonIds.has(progress.lessonId),
+          ).length;
+
+          const studentQuizAttempts = quizAttempts.filter(
+            (attempt) =>
+              attempt.userId === enrollment.userId &&
+              attempt.quiz.courseId === course.id,
+          );
+
+          const passedQuizAttempts = studentQuizAttempts.filter(
+            (attempt) => attempt.passed,
+          ).length;
+
+          const averageQuizScore =
+            studentQuizAttempts.length === 0
+              ? 0
+              : Math.round(
+                  studentQuizAttempts.reduce(
+                    (total, attempt) => total + attempt.score,
+                    0,
+                  ) / studentQuizAttempts.length,
+                );
+
+          const certificate = certificates.find(
+            (item) =>
+              item.userId === enrollment.userId && item.courseId === course.id,
+          );
+
+          const progressPercentage =
+            course.lessons.length === 0
+              ? 0
+              : Math.round(
+                  (studentCompletedLessons / course.lessons.length) * 100,
+                );
+
+          return {
+            id: enrollment.user.id,
+            name: enrollment.user.name,
+            email: enrollment.user.email,
+            joinedAt: enrollment.user.createdAt,
+            enrolledAt: enrollment.enrolledAt,
+            completedLessons: studentCompletedLessons,
+            totalLessons: course.lessons.length,
+            progressPercentage,
+            quizAttempts: studentQuizAttempts.length,
+            passedQuizAttempts,
+            averageQuizScore,
+            certificateEarned: Boolean(certificate),
+            certificate,
+          };
+        });
+
+        return {
+          courseId: course.id,
+          courseTitle: course.title,
+          courseShortName: course.shortName,
+          courseLevel: course.level,
+          courseCategory: course.category,
+          totalLessons: course.lessons.length,
+          students,
+        };
+      });
+
+      const allEnrollmentProgress = courseStudentGroups.flatMap((course) =>
+        course.students.map((student) => student.progressPercentage),
+      );
+
+      const averageProgress =
+        allEnrollmentProgress.length === 0
+          ? 0
+          : Math.round(
+              allEnrollmentProgress.reduce(
+                (total, progress) => total + progress,
+                0,
+              ) / allEnrollmentProgress.length,
+            );
+
+      response.json({
+        success: true,
+        data: {
+          stats: {
+            assignedCourses: courses.length,
+            uniqueStudents: studentIds.length,
+            totalEnrollments: courses.reduce(
+              (total, course) => total + course.enrollments.length,
+              0,
+            ),
+            quizAttempts: quizAttempts.length,
+            certificates: certificates.length,
+            averageProgress,
+          },
+          courses: courseStudentGroups,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 export default instructorRouter;
