@@ -1095,4 +1095,774 @@ instructorRouter.get(
   },
 );
 
+function normalizeCorrectOption(value: unknown) {
+  const option = String(value || "").trim().toUpperCase();
+
+  if (!["A", "B", "C", "D"].includes(option)) {
+    return null;
+  }
+
+  return option;
+}
+
+async function checkInstructorQuizAccess(quizId: number, instructorId: number) {
+  const quiz = await prisma.quiz.findFirst({
+    where: {
+      id: quizId,
+      course: {
+        instructorId,
+      },
+    },
+    select: {
+      id: true,
+      courseId: true,
+    },
+  });
+
+  return quiz;
+}
+
+instructorRouter.get(
+  "/quizzes",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      const courses = await prisma.course.findMany({
+        where: {
+          instructorId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          topics: {
+            orderBy: {
+              position: "asc",
+            },
+            select: {
+              id: true,
+              title: true,
+              courseId: true,
+            },
+          },
+          quizzes: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            include: {
+              topic: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
+              questions: {
+                orderBy: {
+                  position: "asc",
+                },
+              },
+              attempts: {
+                select: {
+                  id: true,
+                  score: true,
+                  passed: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      response.json({
+        success: true,
+        data: {
+          courses,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+instructorRouter.post(
+  "/quizzes",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+      const courseId = Number(request.body.courseId);
+      const rawTopicId = request.body.topicId;
+      const title = String(request.body.title || "").trim();
+      const description = String(request.body.description || "").trim();
+      const passingScore = Number(request.body.passingScore || 60);
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      if (!Number.isInteger(courseId) || courseId <= 0) {
+        response.status(400).json({
+          success: false,
+          message: "Valid course is required.",
+        });
+
+        return;
+      }
+
+      if (!title || !description) {
+        response.status(400).json({
+          success: false,
+          message: "Quiz title and description are required.",
+        });
+
+        return;
+      }
+
+      if (
+        !Number.isInteger(passingScore) ||
+        passingScore < 0 ||
+        passingScore > 100
+      ) {
+        response.status(400).json({
+          success: false,
+          message: "Passing score must be between 0 and 100.",
+        });
+
+        return;
+      }
+
+      const hasAccess = await checkInstructorCourseAccess(courseId, instructorId);
+
+      if (!hasAccess) {
+        response.status(403).json({
+          success: false,
+          message: "You can manage quizzes only for your assigned courses.",
+        });
+
+        return;
+      }
+
+      let topicId: number | null = null;
+
+      if (rawTopicId !== undefined && rawTopicId !== null && rawTopicId !== "") {
+        topicId = Number(rawTopicId);
+
+        if (!Number.isInteger(topicId) || topicId <= 0) {
+          response.status(400).json({
+            success: false,
+            message: "Valid topic is required.",
+          });
+
+          return;
+        }
+
+        const topic = await prisma.topic.findFirst({
+          where: {
+            id: topicId,
+            courseId,
+            course: {
+              instructorId,
+            },
+          },
+        });
+
+        if (!topic) {
+          response.status(404).json({
+            success: false,
+            message: "Topic not found in your assigned course.",
+          });
+
+          return;
+        }
+      }
+
+      const quiz = await prisma.quiz.create({
+        data: {
+          title,
+          description,
+          passingScore,
+          courseId,
+          topicId,
+        },
+        include: {
+          topic: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          questions: true,
+          attempts: true,
+        },
+      });
+
+      response.status(201).json({
+        success: true,
+        message: "Quiz created successfully.",
+        data: {
+          quiz,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+instructorRouter.patch(
+  "/quizzes/:quizId",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+      const quizId = getNumberId(request.params.quizId);
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      if (!quizId) {
+        response.status(400).json({
+          success: false,
+          message: "Valid quiz is required.",
+        });
+
+        return;
+      }
+
+      const existingQuiz = await prisma.quiz.findFirst({
+        where: {
+          id: quizId,
+          course: {
+            instructorId,
+          },
+        },
+      });
+
+      if (!existingQuiz) {
+        response.status(404).json({
+          success: false,
+          message: "Quiz not found in your assigned courses.",
+        });
+
+        return;
+      }
+
+      const title =
+        request.body.title === undefined
+          ? existingQuiz.title
+          : String(request.body.title || "").trim();
+
+      const description =
+        request.body.description === undefined
+          ? existingQuiz.description
+          : String(request.body.description || "").trim();
+
+      const passingScore =
+        request.body.passingScore === undefined
+          ? existingQuiz.passingScore
+          : Number(request.body.passingScore);
+
+      if (!title || !description) {
+        response.status(400).json({
+          success: false,
+          message: "Quiz title and description are required.",
+        });
+
+        return;
+      }
+
+      if (
+        !Number.isInteger(passingScore) ||
+        passingScore < 0 ||
+        passingScore > 100
+      ) {
+        response.status(400).json({
+          success: false,
+          message: "Passing score must be between 0 and 100.",
+        });
+
+        return;
+      }
+
+      let topicId = existingQuiz.topicId;
+
+      if (Object.prototype.hasOwnProperty.call(request.body, "topicId")) {
+        const rawTopicId = request.body.topicId;
+
+        if (rawTopicId === null || rawTopicId === "") {
+          topicId = null;
+        } else {
+          const parsedTopicId = Number(rawTopicId);
+
+          if (!Number.isInteger(parsedTopicId) || parsedTopicId <= 0) {
+            response.status(400).json({
+              success: false,
+              message: "Valid topic is required.",
+            });
+
+            return;
+          }
+
+          const topic = await prisma.topic.findFirst({
+            where: {
+              id: parsedTopicId,
+              courseId: existingQuiz.courseId,
+              course: {
+                instructorId,
+              },
+            },
+          });
+
+          if (!topic) {
+            response.status(404).json({
+              success: false,
+              message: "Topic not found in your assigned course.",
+            });
+
+            return;
+          }
+
+          topicId = parsedTopicId;
+        }
+      }
+
+      const quiz = await prisma.quiz.update({
+        where: {
+          id: quizId,
+        },
+        data: {
+          title,
+          description,
+          passingScore,
+          topicId,
+        },
+        include: {
+          topic: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          questions: {
+            orderBy: {
+              position: "asc",
+            },
+          },
+          attempts: {
+            select: {
+              id: true,
+              score: true,
+              passed: true,
+            },
+          },
+        },
+      });
+
+      response.json({
+        success: true,
+        message: "Quiz updated successfully.",
+        data: {
+          quiz,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+instructorRouter.delete(
+  "/quizzes/:quizId",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+      const quizId = getNumberId(request.params.quizId);
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      if (!quizId) {
+        response.status(400).json({
+          success: false,
+          message: "Valid quiz is required.",
+        });
+
+        return;
+      }
+
+      const existingQuiz = await checkInstructorQuizAccess(quizId, instructorId);
+
+      if (!existingQuiz) {
+        response.status(404).json({
+          success: false,
+          message: "Quiz not found in your assigned courses.",
+        });
+
+        return;
+      }
+
+      await prisma.$transaction([
+        prisma.quizAttempt.deleteMany({
+          where: {
+            quizId,
+          },
+        }),
+        prisma.quizQuestion.deleteMany({
+          where: {
+            quizId,
+          },
+        }),
+        prisma.quiz.delete({
+          where: {
+            id: quizId,
+          },
+        }),
+      ]);
+
+      response.json({
+        success: true,
+        message: "Quiz deleted successfully.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+instructorRouter.post(
+  "/quiz-questions",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+      const quizId = Number(request.body.quizId);
+      const question = String(request.body.question || "").trim();
+      const optionA = String(request.body.optionA || "").trim();
+      const optionB = String(request.body.optionB || "").trim();
+      const optionC = String(request.body.optionC || "").trim();
+      const optionD = String(request.body.optionD || "").trim();
+      const correctOption = normalizeCorrectOption(request.body.correctOption);
+      const explanation = String(request.body.explanation || "").trim();
+      const points = Number(request.body.points || 1);
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      if (!Number.isInteger(quizId) || quizId <= 0) {
+        response.status(400).json({
+          success: false,
+          message: "Valid quiz is required.",
+        });
+
+        return;
+      }
+
+      const existingQuiz = await checkInstructorQuizAccess(quizId, instructorId);
+
+      if (!existingQuiz) {
+        response.status(404).json({
+          success: false,
+          message: "Quiz not found in your assigned courses.",
+        });
+
+        return;
+      }
+
+      if (!question || !optionA || !optionB || !optionC || !optionD) {
+        response.status(400).json({
+          success: false,
+          message: "Question and all four options are required.",
+        });
+
+        return;
+      }
+
+      if (!correctOption) {
+        response.status(400).json({
+          success: false,
+          message: "Correct option must be A, B, C or D.",
+        });
+
+        return;
+      }
+
+      if (!Number.isInteger(points) || points <= 0) {
+        response.status(400).json({
+          success: false,
+          message: "Points must be a positive number.",
+        });
+
+        return;
+      }
+
+      const lastQuestion = await prisma.quizQuestion.aggregate({
+        where: {
+          quizId,
+        },
+        _max: {
+          position: true,
+        },
+      });
+
+      const createdQuestion = await prisma.quizQuestion.create({
+        data: {
+          question,
+          optionA,
+          optionB,
+          optionC,
+          optionD,
+          correctOption,
+          explanation,
+          points,
+          position: (lastQuestion._max.position || 0) + 1,
+          quizId,
+        },
+      });
+
+      response.status(201).json({
+        success: true,
+        message: "Question created successfully.",
+        data: {
+          question: createdQuestion,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+instructorRouter.patch(
+  "/quiz-questions/:questionId",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+      const questionId = getNumberId(request.params.questionId);
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      if (!questionId) {
+        response.status(400).json({
+          success: false,
+          message: "Valid question is required.",
+        });
+
+        return;
+      }
+
+      const existingQuestion = await prisma.quizQuestion.findFirst({
+        where: {
+          id: questionId,
+          quiz: {
+            course: {
+              instructorId,
+            },
+          },
+        },
+      });
+
+      if (!existingQuestion) {
+        response.status(404).json({
+          success: false,
+          message: "Question not found in your assigned course quizzes.",
+        });
+
+        return;
+      }
+
+      const question =
+        request.body.question === undefined
+          ? existingQuestion.question
+          : String(request.body.question || "").trim();
+
+      const optionA =
+        request.body.optionA === undefined
+          ? existingQuestion.optionA
+          : String(request.body.optionA || "").trim();
+
+      const optionB =
+        request.body.optionB === undefined
+          ? existingQuestion.optionB
+          : String(request.body.optionB || "").trim();
+
+      const optionC =
+        request.body.optionC === undefined
+          ? existingQuestion.optionC
+          : String(request.body.optionC || "").trim();
+
+      const optionD =
+        request.body.optionD === undefined
+          ? existingQuestion.optionD
+          : String(request.body.optionD || "").trim();
+
+      const correctOption =
+        request.body.correctOption === undefined
+          ? existingQuestion.correctOption
+          : normalizeCorrectOption(request.body.correctOption);
+
+      const explanation =
+        request.body.explanation === undefined
+          ? existingQuestion.explanation
+          : String(request.body.explanation || "").trim();
+
+      const points =
+        request.body.points === undefined
+          ? existingQuestion.points
+          : Number(request.body.points);
+
+      if (!question || !optionA || !optionB || !optionC || !optionD) {
+        response.status(400).json({
+          success: false,
+          message: "Question and all four options are required.",
+        });
+
+        return;
+      }
+
+      if (!correctOption) {
+        response.status(400).json({
+          success: false,
+          message: "Correct option must be A, B, C or D.",
+        });
+
+        return;
+      }
+
+      if (!Number.isInteger(points) || points <= 0) {
+        response.status(400).json({
+          success: false,
+          message: "Points must be a positive number.",
+        });
+
+        return;
+      }
+
+      const updatedQuestion = await prisma.quizQuestion.update({
+        where: {
+          id: questionId,
+        },
+        data: {
+          question,
+          optionA,
+          optionB,
+          optionC,
+          optionD,
+          correctOption,
+          explanation,
+          points,
+        },
+      });
+
+      response.json({
+        success: true,
+        message: "Question updated successfully.",
+        data: {
+          question: updatedQuestion,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+instructorRouter.delete(
+  "/quiz-questions/:questionId",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+      const questionId = getNumberId(request.params.questionId);
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      if (!questionId) {
+        response.status(400).json({
+          success: false,
+          message: "Valid question is required.",
+        });
+
+        return;
+      }
+
+      const existingQuestion = await prisma.quizQuestion.findFirst({
+        where: {
+          id: questionId,
+          quiz: {
+            course: {
+              instructorId,
+            },
+          },
+        },
+      });
+
+      if (!existingQuestion) {
+        response.status(404).json({
+          success: false,
+          message: "Question not found in your assigned course quizzes.",
+        });
+
+        return;
+      }
+
+      await prisma.quizQuestion.delete({
+        where: {
+          id: questionId,
+        },
+      });
+
+      response.json({
+        success: true,
+        message: "Question deleted successfully.",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 export default instructorRouter;
