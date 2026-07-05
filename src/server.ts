@@ -17,6 +17,8 @@ import profileRouter from "./routes/profileRoutes.js";
 import adminStudentRouter from "./routes/adminStudentRoutes.js";
 import aiRouter from "./routes/aiRoutes.js";
 import instructorRouter from "./routes/instructorRoutes.js";
+import adminInstructorRouter from "./routes/adminInstructorRoutes.js";
+
 
 dotenv.config();
 
@@ -67,6 +69,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/admin/students", adminStudentRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/instructor", instructorRouter);
+app.use("/api/admin/instructors", adminInstructorRouter);
 
 app.use(
   (
