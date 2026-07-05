@@ -92,25 +92,36 @@ instructorRouter.get(
             });
 
       const totalLessons = courses.reduce(
-        (total, course) => total + course.lessons.length,
-        0,
+  (total, course) => total + course.lessons.length,
+  0,
+);
+
+const totalEnrollments = courses.reduce(
+  (total, course) => total + course.enrollments.length,
+  0,
+);
+
+const totalPossibleLessonCompletions = courses.reduce(
+  (total, course) =>
+    total + course.lessons.length * course.enrollments.length,
+  0,
+);
+
+const totalCertificates = courses.reduce(
+  (total, course) => total + course.certificates.length,
+  0,
+);
+
+const averageProgress =
+  totalPossibleLessonCompletions === 0
+    ? 0
+    : Math.min(
+        100,
+        Math.round(
+          (completedLessonsCount / totalPossibleLessonCompletions) * 100,
+        ),
       );
-
-      const totalEnrollments = courses.reduce(
-        (total, course) => total + course.enrollments.length,
-        0,
-      );
-
-      const totalCertificates = courses.reduce(
-        (total, course) => total + course.certificates.length,
-        0,
-      );
-
-      const averageProgress =
-        totalLessons === 0
-          ? 0
-          : Math.round((completedLessonsCount / totalLessons) * 100);
-
+      
       const averageQuizScore =
         quizAttempts.length === 0
           ? 0
