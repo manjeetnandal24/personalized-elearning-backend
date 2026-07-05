@@ -1865,4 +1865,240 @@ instructorRouter.delete(
   },
 );
 
+instructorRouter.get(
+  "/analytics",
+  async (request: AuthenticatedRequest, response, next) => {
+    try {
+      const instructorId = request.user?.userId;
+
+      if (!instructorId) {
+        response.status(401).json({
+          success: false,
+          message: "Instructor is not authenticated.",
+        });
+
+        return;
+      }
+
+      const courses = await prisma.course.findMany({
+        where: {
+          instructorId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          lessons: {
+            select: {
+              id: true,
+            },
+          },
+          enrollments: {
+            select: {
+              id: true,
+              userId: true,
+              enrolledAt: true,
+            },
+          },
+          quizzes: {
+            select: {
+              id: true,
+              title: true,
+              attempts: {
+                select: {
+                  id: true,
+                  userId: true,
+                  score: true,
+                  passed: true,
+                },
+              },
+            },
+          },
+          certificates: {
+            select: {
+              id: true,
+              userId: true,
+              courseId: true,
+              certificateCode: true,
+              issuedAt: true,
+            },
+          },
+        },
+      });
+
+      const lessonIds = courses.flatMap((course) =>
+        course.lessons.map((lesson) => lesson.id),
+      );
+
+      const studentIds = Array.from(
+        new Set(
+          courses.flatMap((course) =>
+            course.enrollments.map((enrollment) => enrollment.userId),
+          ),
+        ),
+      );
+
+      const completedProgress =
+        lessonIds.length === 0 || studentIds.length === 0
+          ? []
+          : await prisma.progress.findMany({
+              where: {
+                lessonId: {
+                  in: lessonIds,
+                },
+                userId: {
+                  in: studentIds,
+                },
+                isCompleted: true,
+              },
+              select: {
+                userId: true,
+                lessonId: true,
+              },
+            });
+
+      const courseAnalytics = courses.map((course) => {
+        const courseLessonIds = new Set(
+          course.lessons.map((lesson) => lesson.id),
+        );
+
+        const courseQuizAttempts = course.quizzes.flatMap(
+          (quiz) => quiz.attempts,
+        );
+
+        const completedLessonsForCourse = completedProgress.filter((progress) =>
+          courseLessonIds.has(progress.lessonId),
+        ).length;
+
+        const totalPossibleCompletions =
+          course.lessons.length * course.enrollments.length;
+
+        const averageProgress =
+          totalPossibleCompletions === 0
+            ? 0
+            : Math.round(
+                (completedLessonsForCourse / totalPossibleCompletions) * 100,
+              );
+
+        const averageQuizScore =
+          courseQuizAttempts.length === 0
+            ? 0
+            : Math.round(
+                courseQuizAttempts.reduce(
+                  (total, attempt) => total + attempt.score,
+                  0,
+                ) / courseQuizAttempts.length,
+              );
+
+        const passedAttempts = courseQuizAttempts.filter(
+          (attempt) => attempt.passed,
+        ).length;
+
+        const passRate =
+          courseQuizAttempts.length === 0
+            ? 0
+            : Math.round((passedAttempts / courseQuizAttempts.length) * 100);
+
+        return {
+          courseId: course.id,
+          courseTitle: course.title,
+          courseShortName: course.shortName,
+          courseLevel: course.level,
+          courseCategory: course.category,
+          studentsCount: course.enrollments.length,
+          lessonsCount: course.lessons.length,
+          quizzesCount: course.quizzes.length,
+          quizAttemptsCount: courseQuizAttempts.length,
+          averageQuizScore,
+          passRate,
+          averageProgress,
+          certificatesCount: course.certificates.length,
+        };
+      });
+
+      const totalEnrollments = courses.reduce(
+        (total, course) => total + course.enrollments.length,
+        0,
+      );
+
+      const totalLessons = courses.reduce(
+        (total, course) => total + course.lessons.length,
+        0,
+      );
+
+      const allQuizAttempts = courses.flatMap((course) =>
+        course.quizzes.flatMap((quiz) => quiz.attempts),
+      );
+
+      const totalCertificates = courses.reduce(
+        (total, course) => total + course.certificates.length,
+        0,
+      );
+
+      const averageQuizScore =
+        allQuizAttempts.length === 0
+          ? 0
+          : Math.round(
+              allQuizAttempts.reduce(
+                (total, attempt) => total + attempt.score,
+                0,
+              ) / allQuizAttempts.length,
+            );
+
+      const passedAttempts = allQuizAttempts.filter(
+        (attempt) => attempt.passed,
+      ).length;
+
+      const overallPassRate =
+        allQuizAttempts.length === 0
+          ? 0
+          : Math.round((passedAttempts / allQuizAttempts.length) * 100);
+
+      const averageProgress =
+        courseAnalytics.length === 0
+          ? 0
+          : Math.round(
+              courseAnalytics.reduce(
+                (total, course) => total + course.averageProgress,
+                0,
+              ) / courseAnalytics.length,
+            );
+
+      const topProgressCourses = [...courseAnalytics]
+        .sort((firstCourse, secondCourse) => {
+          return secondCourse.averageProgress - firstCourse.averageProgress;
+        })
+        .slice(0, 5);
+
+      const topQuizCourses = [...courseAnalytics]
+        .sort((firstCourse, secondCourse) => {
+          return secondCourse.averageQuizScore - firstCourse.averageQuizScore;
+        })
+        .slice(0, 5);
+
+      response.json({
+        success: true,
+        data: {
+          stats: {
+            assignedCourses: courses.length,
+            uniqueStudents: studentIds.length,
+            totalEnrollments,
+            totalLessons,
+            quizAttempts: allQuizAttempts.length,
+            averageQuizScore,
+            passRate: overallPassRate,
+            averageProgress,
+            certificates: totalCertificates,
+          },
+          courseAnalytics,
+          topProgressCourses,
+          topQuizCourses,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 export default instructorRouter;
