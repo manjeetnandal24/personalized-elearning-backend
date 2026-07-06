@@ -13,6 +13,13 @@ enum UserRole {
   ADMIN
 }
 
+enum AnnouncementTarget {
+  ALL
+  STUDENTS
+  INSTRUCTORS
+  COURSE
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String
@@ -28,6 +35,7 @@ model User {
   certificates Certificate[]
 
   teachingCourses Course[] @relation("CourseInstructor")
+  announcements Announcement[] @relation("AnnouncementAuthor")
 }
 
 model Course {
@@ -51,6 +59,7 @@ model Course {
   quizzes             Quiz[]
   certificateTemplate CertificateTemplate?
   certificates        Certificate[]
+  announcements       Announcement[]
 }
 
 model Topic {
@@ -189,4 +198,23 @@ model Certificate {
   @@unique([userId, courseId])
   @@index([userId])
   @@index([courseId])
+}
+
+
+model Announcement {
+  id        Int                @id @default(autoincrement())
+  title     String
+  message   String
+  target    AnnouncementTarget @default(ALL)
+  courseId  Int?
+  authorId  Int
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  course Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  author User    @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([target])
+  @@index([courseId])
+  @@index([authorId])
 }
