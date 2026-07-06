@@ -20,6 +20,14 @@ enum AnnouncementTarget {
   COURSE
 }
 
+enum CourseResourceType {
+  LINK
+  PDF
+  VIDEO
+  NOTE
+  OTHER
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String
@@ -36,6 +44,7 @@ model User {
 
   teachingCourses Course[] @relation("CourseInstructor")
   announcements Announcement[] @relation("AnnouncementAuthor")
+  createdResources CourseResource[] @relation("CourseResourceCreator")
 }
 
 model Course {
@@ -60,6 +69,7 @@ model Course {
   certificateTemplate CertificateTemplate?
   certificates        Certificate[]
   announcements       Announcement[]
+  resources           CourseResource[]
 }
 
 model Topic {
@@ -217,4 +227,23 @@ model Announcement {
   @@index([target])
   @@index([courseId])
   @@index([authorId])
+}
+
+model CourseResource {
+  id          Int                @id @default(autoincrement())
+  title       String
+  description String             @default("")
+  resourceUrl String
+  type        CourseResourceType @default(LINK)
+  courseId    Int
+  createdById Int
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("CourseResourceCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([createdById])
+  @@index([type])
 }

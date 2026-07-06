@@ -19,6 +19,7 @@ import aiRouter from "./routes/aiRoutes.js";
 import instructorRouter from "./routes/instructorRoutes.js";
 import adminInstructorRouter from "./routes/adminInstructorRoutes.js";
 import announcementRouter from "./routes/announcementRoutes.js";
+import courseResourceRouter from "./routes/courseResourceRoutes.js";
 
 
 dotenv.config();
@@ -72,6 +73,7 @@ app.use("/api/ai", aiRouter);
 app.use("/api/instructor", instructorRouter);
 app.use("/api/admin/instructors", adminInstructorRouter);
 app.use("/api/announcements", announcementRouter);
+app.use("/api/course-resources", courseResourceRouter);
 
 app.use(
   (
