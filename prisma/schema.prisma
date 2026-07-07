@@ -28,6 +28,12 @@ enum CourseResourceType {
   OTHER
 }
 
+enum DiscussionStatus {
+  OPEN
+  RESOLVED
+}
+
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String
@@ -42,9 +48,11 @@ model User {
   quizAttempts QuizAttempt[]
   certificates Certificate[]
 
-  teachingCourses Course[] @relation("CourseInstructor")
-  announcements Announcement[] @relation("AnnouncementAuthor")
-  createdResources CourseResource[] @relation("CourseResourceCreator")
+  teachingCourses Course[]                     @relation("CourseInstructor")
+  announcements Announcement[]                 @relation("AnnouncementAuthor")
+  createdResources CourseResource[]            @relation("CourseResourceCreator")
+  discussionThreads CourseDiscussion[]         @relation("DiscussionAuthor")
+  discussionReplies CourseDiscussionReply[]    @relation("DiscussionReplyAuthor")
 }
 
 model Course {
@@ -70,6 +78,7 @@ model Course {
   certificates        Certificate[]
   announcements       Announcement[]
   resources           CourseResource[]
+  discussions         CourseDiscussion[]
 }
 
 model Topic {
@@ -246,4 +255,38 @@ model CourseResource {
   @@index([courseId])
   @@index([createdById])
   @@index([type])
+}
+
+model CourseDiscussion {
+  id          Int              @id @default(autoincrement())
+  title       String
+  message     String
+  status      DiscussionStatus @default(OPEN)
+  courseId    Int
+  authorId    Int
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  course  Course                  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  author  User                    @relation("DiscussionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  replies CourseDiscussionReply[]
+
+  @@index([courseId])
+  @@index([authorId])
+  @@index([status])
+}
+
+model CourseDiscussionReply {
+  id           Int      @id @default(autoincrement())
+  message      String
+  discussionId Int
+  authorId     Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  discussion CourseDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author     User             @relation("DiscussionReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([discussionId])
+  @@index([authorId])
 }

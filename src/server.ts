@@ -20,6 +20,7 @@ import instructorRouter from "./routes/instructorRoutes.js";
 import adminInstructorRouter from "./routes/adminInstructorRoutes.js";
 import announcementRouter from "./routes/announcementRoutes.js";
 import courseResourceRouter from "./routes/courseResourceRoutes.js";
+import courseDiscussionRouter from "./routes/courseDiscussionRoutes.js";
 
 
 dotenv.config();
@@ -74,6 +75,7 @@ app.use("/api/instructor", instructorRouter);
 app.use("/api/admin/instructors", adminInstructorRouter);
 app.use("/api/announcements", announcementRouter);
 app.use("/api/course-resources", courseResourceRouter);
+app.use("/api/discussions", courseDiscussionRouter);
 
 app.use(
   (
