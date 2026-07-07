@@ -33,6 +33,18 @@ enum DiscussionStatus {
   RESOLVED
 }
 
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
 
 model User {
   id           Int      @id @default(autoincrement())
@@ -53,6 +65,8 @@ model User {
   createdResources CourseResource[]            @relation("CourseResourceCreator")
   discussionThreads CourseDiscussion[]         @relation("DiscussionAuthor")
   discussionReplies CourseDiscussionReply[]    @relation("DiscussionReplyAuthor")
+  supportTickets SupportTicket[]               @relation("SupportTicketAuthor")
+  supportReplies SupportTicketReply[]          @relation("SupportReplyAuthor")
 }
 
 model Course {
@@ -288,5 +302,39 @@ model CourseDiscussionReply {
   author     User             @relation("DiscussionReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([discussionId])
+  @@index([authorId])
+}
+
+model SupportTicket {
+  id        Int                   @id @default(autoincrement())
+  title     String
+  message   String
+  category  String                @default("General")
+  status    SupportTicketStatus   @default(OPEN)
+  priority  SupportTicketPriority @default(MEDIUM)
+  userId    Int
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  user    User                 @relation("SupportTicketAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  replies SupportTicketReply[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+}
+
+model SupportTicketReply {
+  id        Int      @id @default(autoincrement())
+  message   String
+  ticketId  Int
+  authorId  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User          @relation("SupportReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
   @@index([authorId])
 }
