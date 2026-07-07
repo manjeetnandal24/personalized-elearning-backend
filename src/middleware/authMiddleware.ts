@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { attachActivityLogger } from "./activityLoggerMiddleware.js";
 
 import { prisma } from "../lib/prisma.js";
 
@@ -84,6 +85,8 @@ export async function authenticateUser(
       email: freshUser.email,
       role: freshUser.role,
     };
+
+    attachActivityLogger(request, response);
 
     next();
   } catch {

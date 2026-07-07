@@ -67,6 +67,7 @@ model User {
   discussionReplies CourseDiscussionReply[]    @relation("DiscussionReplyAuthor")
   supportTickets SupportTicket[]               @relation("SupportTicketAuthor")
   supportReplies SupportTicketReply[]          @relation("SupportReplyAuthor")
+  activityLogs ActivityLog[]                   @relation("ActivityLogActor")
 }
 
 model Course {
@@ -337,4 +338,22 @@ model SupportTicketReply {
 
   @@index([ticketId])
   @@index([authorId])
+}
+
+model ActivityLog {
+  id         Int      @id @default(autoincrement())
+  action     String
+  message    String
+  entityType String   @default("SYSTEM")
+  entityId   Int?
+  actorId    Int?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("ActivityLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action])
+  @@index([entityType])
+  @@index([actorId])
+  @@index([createdAt])
 }

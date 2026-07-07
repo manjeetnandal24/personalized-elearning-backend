@@ -22,6 +22,7 @@ import announcementRouter from "./routes/announcementRoutes.js";
 import courseResourceRouter from "./routes/courseResourceRoutes.js";
 import courseDiscussionRouter from "./routes/courseDiscussionRoutes.js";
 import supportTicketRouter from "./routes/supportTicketRoutes.js";
+import adminActivityLogRouter from "./routes/adminActivityLogRoutes.js";
 
 
 dotenv.config();
@@ -78,6 +79,7 @@ app.use("/api/announcements", announcementRouter);
 app.use("/api/course-resources", courseResourceRouter);
 app.use("/api/discussions", courseDiscussionRouter);
 app.use("/api/support-tickets", supportTicketRouter);
+app.use("/api/admin/activity-logs", adminActivityLogRouter);
 
 app.use(
   (
