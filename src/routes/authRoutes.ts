@@ -47,6 +47,21 @@ function createVerificationLink(token: string) {
   return `${frontendUrl}/verify-email/${token}`;
 }
 
+function createPasswordResetToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function createPasswordResetExpiry() {
+  const expiryDate = new Date();
+  expiryDate.setHours(expiryDate.getHours() + 1);
+  return expiryDate;
+}
+
+function createPasswordResetLink(token: string) {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  return `${frontendUrl}/reset-password/${token}`;
+}
+
 authRouter.post("/register", async (request, response, next) => {
   try {
     const { name, email, password } = request.body;
@@ -426,6 +441,135 @@ authRouter.post("/resend-verification", async (request, response, next) => {
       data: {
         verificationLink: createVerificationLink(emailVerificationToken),
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/forgot-password", async (request, response, next) => {
+  try {
+    const email = String(request.body.email || "").trim().toLowerCase();
+
+    if (!email) {
+      response.status(400).json({
+        success: false,
+        message: "Email is required.",
+      });
+
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+    });
+
+    if (!user) {
+      response.json({
+        success: true,
+        message:
+          "If an account exists with this email, a password reset link has been generated.",
+        data: {
+          resetLink: null,
+        },
+      });
+
+      return;
+    }
+
+    const passwordResetToken = createPasswordResetToken();
+    const passwordResetTokenExpiresAt = createPasswordResetExpiry();
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordResetToken,
+        passwordResetTokenExpiresAt,
+      },
+    });
+
+    response.json({
+      success: true,
+      message: "Password reset link generated successfully.",
+      data: {
+        resetLink: createPasswordResetLink(passwordResetToken),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/reset-password/:token", async (request, response, next) => {
+  try {
+    const token = String(request.params.token || "").trim();
+    const password = String(request.body.password || "");
+
+    if (!token) {
+      response.status(400).json({
+        success: false,
+        message: "Password reset token is required.",
+      });
+
+      return;
+    }
+
+    if (password.length < 8) {
+      response.status(400).json({
+        success: false,
+        message: "Password must contain at least 8 characters.",
+      });
+
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        passwordResetToken: token,
+      },
+    });
+
+    if (!user) {
+      response.status(400).json({
+        success: false,
+        message: "Invalid or expired password reset link.",
+      });
+
+      return;
+    }
+
+    if (
+      !user.passwordResetTokenExpiresAt ||
+      user.passwordResetTokenExpiresAt < new Date()
+    ) {
+      response.status(400).json({
+        success: false,
+        message: "Password reset link expired. Please request a new one.",
+      });
+
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetTokenExpiresAt: null,
+      },
+    });
+
+    response.json({
+      success: true,
+      message: "Password reset successfully. You can now login.",
     });
   } catch (error) {
     next(error);
