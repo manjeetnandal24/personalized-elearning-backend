@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
@@ -28,6 +30,21 @@ function createToken(
       expiresIn: "7d",
     },
   );
+}
+
+function createEmailVerificationToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function createEmailVerificationExpiry() {
+  const expiryDate = new Date();
+  expiryDate.setHours(expiryDate.getHours() + 24);
+  return expiryDate;
+}
+
+function createVerificationLink(token: string) {
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  return `${frontendUrl}/verify-email/${token}`;
 }
 
 authRouter.post("/register", async (request, response, next) => {
@@ -91,29 +108,35 @@ authRouter.post("/register", async (request, response, next) => {
 
     const passwordHash = await bcrypt.hash(cleanPassword, 10);
 
+    const emailVerificationToken = createEmailVerificationToken();
+    const emailVerificationTokenExpiresAt = createEmailVerificationExpiry();
+
     const user = await prisma.user.create({
       data: {
         name: cleanName,
         email: cleanEmail,
         passwordHash,
+        emailVerified: false,
+        emailVerificationToken,
+        emailVerificationTokenExpiresAt,
       },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
+        emailVerified: true,
         createdAt: true,
       },
     });
 
-    const token = createToken(user.id, user.email, user.role);
-
     response.status(201).json({
       success: true,
-      message: "Account created successfully.",
+      message:
+        "Account created successfully. Please verify your email before login.",
       data: {
         user,
-        token,
+        verificationLink: createVerificationLink(emailVerificationToken),
       },
     });
   } catch (error) {
@@ -141,6 +164,15 @@ authRouter.post("/login", async (request, response, next) => {
       where: {
         email: cleanEmail,
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        emailVerified: true,
+        createdAt: true,
+      },
     });
 
     if (!user) {
@@ -166,6 +198,18 @@ authRouter.post("/login", async (request, response, next) => {
       return;
     }
 
+    if (!user.emailVerified) {
+      response.status(403).json({
+        success: false,
+        message: "Please verify your email before logging in.",
+        data: {
+          needsEmailVerification: true,
+        },
+      });
+
+      return;
+    }
+
     const token = createToken(user.id, user.email, user.role);
 
     response.json({
@@ -177,6 +221,7 @@ authRouter.post("/login", async (request, response, next) => {
           name: user.name,
           email: user.email,
           role: user.role,
+          emailVerified: user.emailVerified,
           createdAt: user.createdAt,
         },
         token,
@@ -215,6 +260,7 @@ authRouter.get("/me", async (request, response) => {
     const decoded = jwt.verify(token, jwtSecret) as {
       userId: number;
       email: string;
+      role?: "STUDENT" | "INSTRUCTOR" | "ADMIN";
     };
 
     const user = await prisma.user.findUnique({
@@ -226,6 +272,7 @@ authRouter.get("/me", async (request, response) => {
         name: true,
         email: true,
         role: true,
+        emailVerified: true,
         createdAt: true,
       },
     });
@@ -250,6 +297,138 @@ authRouter.get("/me", async (request, response) => {
       success: false,
       message: "Invalid or expired token.",
     });
+  }
+});
+
+authRouter.get("/verify-email/:token", async (request, response, next) => {
+  try {
+    const token = String(request.params.token || "").trim();
+
+    if (!token) {
+      response.status(400).json({
+        success: false,
+        message: "Verification token is required.",
+      });
+
+      return;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        emailVerificationToken: token,
+      },
+    });
+
+    if (!user) {
+      response.status(400).json({
+        success: false,
+        message: "Invalid or expired verification link.",
+      });
+
+      return;
+    }
+
+    if (
+      !user.emailVerificationTokenExpiresAt ||
+      user.emailVerificationTokenExpiresAt < new Date()
+    ) {
+      response.status(400).json({
+        success: false,
+        message: "Verification link expired. Please request a new one.",
+      });
+
+      return;
+    }
+
+    const verifiedUser = await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationTokenExpiresAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        emailVerified: true,
+      },
+    });
+
+    response.json({
+      success: true,
+      message: "Email verified successfully. You can now login.",
+      data: {
+        user: verifiedUser,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+authRouter.post("/resend-verification", async (request, response, next) => {
+  try {
+    const email = String(request.body.email || "").trim().toLowerCase();
+
+    if (!email) {
+      response.status(400).json({
+        success: false,
+        message: "Email is required.",
+      });
+
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        email,
+      },
+    });
+
+    if (!user) {
+      response.status(404).json({
+        success: false,
+        message: "Account not found.",
+      });
+
+      return;
+    }
+
+    if (user.emailVerified) {
+      response.status(400).json({
+        success: false,
+        message: "Email is already verified. Please login.",
+      });
+
+      return;
+    }
+
+    const emailVerificationToken = createEmailVerificationToken();
+    const emailVerificationTokenExpiresAt = createEmailVerificationExpiry();
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        emailVerificationToken,
+        emailVerificationTokenExpiresAt,
+      },
+    });
+
+    response.json({
+      success: true,
+      message: "Verification link generated successfully.",
+      data: {
+        verificationLink: createVerificationLink(emailVerificationToken),
+      },
+    });
+  } catch (error) {
+    next(error);
   }
 });
 
