@@ -5,6 +5,10 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 
 import { prisma } from "../lib/prisma.js";
+import {
+  sendPasswordResetEmail,
+  sendVerificationEmail,
+} from "../lib/mail.js";
 
 const authRouter = Router();
 
@@ -145,13 +149,18 @@ authRouter.post("/register", async (request, response, next) => {
       },
     });
 
+    const verificationLink = createVerificationLink(emailVerificationToken);
+
+    await sendVerificationEmail(cleanEmail, verificationLink);
+
     response.status(201).json({
       success: true,
       message:
-        "Account created successfully. Please verify your email before login.",
+        "Account created successfully. Please check your email to verify your account.",
       data: {
         user,
-        verificationLink: createVerificationLink(emailVerificationToken),
+        verificationLink:
+          process.env.NODE_ENV === "production" ? null : verificationLink,
       },
     });
   } catch (error) {
@@ -435,11 +444,16 @@ authRouter.post("/resend-verification", async (request, response, next) => {
       },
     });
 
+    const verificationLink = createVerificationLink(emailVerificationToken);
+
+    await sendVerificationEmail(email, verificationLink);
+
     response.json({
       success: true,
-      message: "Verification link generated successfully.",
+      message: "Verification email sent successfully.",
       data: {
-        verificationLink: createVerificationLink(emailVerificationToken),
+        verificationLink:
+          process.env.NODE_ENV === "production" ? null : verificationLink,
       },
     });
   } catch (error) {
@@ -470,7 +484,7 @@ authRouter.post("/forgot-password", async (request, response, next) => {
       response.json({
         success: true,
         message:
-          "If an account exists with this email, a password reset link has been generated.",
+          "If an account exists with this email, a password reset link has been sent.",
         data: {
           resetLink: null,
         },
@@ -494,18 +508,16 @@ authRouter.post("/forgot-password", async (request, response, next) => {
 
     const resetLink = createPasswordResetLink(passwordResetToken);
 
-if (process.env.NODE_ENV !== "production") {
-  console.log("Password reset link:", resetLink);
-}
+    await sendPasswordResetEmail(email, resetLink);
 
-response.json({
-  success: true,
-  message:
-    "If an account exists with this email, a password reset link has been sent.",
-  data: {
-    resetLink: process.env.NODE_ENV === "production" ? null : resetLink,
-  },
-});
+    response.json({
+      success: true,
+      message:
+        "If an account exists with this email, a password reset link has been sent.",
+      data: {
+        resetLink: process.env.NODE_ENV === "production" ? null : resetLink,
+      },
+    });
   } catch (error) {
     next(error);
   }
