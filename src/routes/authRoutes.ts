@@ -492,13 +492,20 @@ authRouter.post("/forgot-password", async (request, response, next) => {
       },
     });
 
-    response.json({
-      success: true,
-      message: "Password reset link generated successfully.",
-      data: {
-        resetLink: createPasswordResetLink(passwordResetToken),
-      },
-    });
+    const resetLink = createPasswordResetLink(passwordResetToken);
+
+if (process.env.NODE_ENV !== "production") {
+  console.log("Password reset link:", resetLink);
+}
+
+response.json({
+  success: true,
+  message:
+    "If an account exists with this email, a password reset link has been sent.",
+  data: {
+    resetLink: process.env.NODE_ENV === "production" ? null : resetLink,
+  },
+});
   } catch (error) {
     next(error);
   }
